@@ -1,0 +1,2219 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Game Pilih Pintu - Multiplayer Party (Host & Player)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Press+Start+2P&display=swap"
+    rel="stylesheet">
+  <!-- PeerJS for Real-time Multiplayer over Network/WiFi -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      background: #090d16;
+      color: #fff;
+      font-family: 'Fredoka', cursive, sans-serif;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      max-width: 960px;
+      max-height: 720px;
+      background: #0f172a;
+      border-radius: 16px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(99, 102, 241, 0.25);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* TOP QUESTION HUD (HOST) */
+    #top-hud {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
+      padding: 12px 18px;
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(15, 23, 42, 0.85) 80%, rgba(15, 23, 42, 0) 100%);
+      pointer-events: none;
+    }
+
+    .hud-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .badge-stage {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+    }
+
+    .player-counter {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #38bdf8;
+    }
+
+    .timer-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .timer-bar-bg {
+      flex: 1;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 5px;
+      overflow: hidden;
+    }
+
+    .timer-bar-fill {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #f59e0b, #ef4444);
+      transition: width 0.1s linear;
+    }
+
+    .timer-text {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 14px;
+      color: #facc15;
+      min-width: 45px;
+      text-align: right;
+      text-shadow: 0 0 8px rgba(250, 204, 21, 0.8);
+    }
+
+    .timer-warning {
+      color: #ef4444 !important;
+      animation: pulseTimer 0.5s infinite alternate;
+    }
+
+    @keyframes pulseTimer {
+      from {
+        transform: scale(1);
+      }
+
+      to {
+        transform: scale(1.15);
+      }
+    }
+
+    .question-card {
+      background: rgba(30, 41, 59, 0.9);
+      border: 2px solid rgba(129, 140, 248, 0.4);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      border-radius: 12px;
+      padding: 10px 16px;
+      text-align: center;
+      backdrop-filter: blur(8px);
+    }
+
+    .question-card h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #f8fafc;
+      line-height: 1.35;
+    }
+
+    /* CANVAS */
+    #game-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: #000;
+    }
+
+    /* DOOR TEXT LABELS OVERLAY */
+    #doors-overlay {
+      position: absolute;
+      top: 155px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-around;
+      padding: 0 40px;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .door-label-card {
+      background: rgba(15, 23, 42, 0.9);
+      border: 2px solid #6366f1;
+      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.6);
+      border-radius: 10px;
+      padding: 6px 12px;
+      max-width: 200px;
+      min-width: 130px;
+      text-align: center;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+
+    .door-label-card .door-tag {
+      display: inline-block;
+      font-weight: 700;
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
+
+    .tag-a {
+      background: #3b82f6;
+    }
+
+    .tag-b {
+      background: #ec4899;
+    }
+
+    .tag-c {
+      background: #10b981;
+    }
+
+    .door-label-card .door-text {
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      line-height: 1.25;
+    }
+
+    /* ROUND RESULT BANNER */
+    .round-result-banner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      z-index: 50;
+      background: rgba(15, 23, 42, 0.95);
+      border: 3px solid #facc15;
+      padding: 22px 35px;
+      border-radius: 20px;
+      text-align: center;
+      box-shadow: 0 0 50px rgba(250, 204, 21, 0.5);
+      transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      pointer-events: none;
+      max-width: 90%;
+    }
+
+    .round-result-banner.show {
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .round-result-banner h1 {
+      font-size: 26px;
+      margin-bottom: 8px;
+    }
+
+    .round-result-banner p {
+      font-size: 15px;
+      color: #94a3b8;
+    }
+
+    /* MODAL / MENU SCREENS */
+    .menu-screen {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at center, #1e1b4b 0%, #090d16 100%);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+      text-align: center;
+      overflow-y: auto;
+    }
+
+    .menu-screen.hidden {
+      display: none !important;
+    }
+
+    .game-logo {
+      font-size: 38px;
+      font-weight: 800;
+      margin-bottom: 6px;
+      background: linear-gradient(135deg, #facc15, #f97316, #ef4444);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 4px 20px rgba(249, 115, 22, 0.4);
+    }
+
+    .game-subtitle {
+      font-size: 14px;
+      color: #cbd5e1;
+      margin-bottom: 22px;
+      max-width: 520px;
+    }
+
+    /* ROLE SELECTION CARDS (HOST vs PLAYER) */
+    .role-selection {
+      display: flex;
+      gap: 18px;
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .role-card {
+      background: rgba(30, 41, 59, 0.7);
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      border-radius: 14px;
+      padding: 18px 24px;
+      cursor: pointer;
+      transition: all 0.25s;
+      width: 220px;
+      text-align: center;
+    }
+
+    .role-card:hover {
+      background: rgba(51, 65, 85, 0.9);
+      transform: translateY(-4px);
+      border-color: #6366f1;
+    }
+
+    .role-card.selected {
+      border-color: #facc15;
+      background: rgba(250, 204, 21, 0.15);
+      box-shadow: 0 0 25px rgba(250, 204, 21, 0.3);
+    }
+
+    .role-icon {
+      font-size: 38px;
+      margin-bottom: 8px;
+    }
+
+    .role-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .role-desc {
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.4;
+    }
+
+    .form-box {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 16px 22px;
+      border-radius: 14px;
+      width: 100%;
+      max-width: 360px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .form-box input {
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #fff;
+      font-family: 'Fredoka', cursive;
+      font-size: 15px;
+      outline: none;
+      text-align: center;
+    }
+
+    .form-box input:focus {
+      border-color: #facc15;
+      box-shadow: 0 0 10px rgba(250, 204, 21, 0.4);
+    }
+
+    .btn-action {
+      background: linear-gradient(135deg, #10b981, #059669);
+      border: none;
+      color: #fff;
+      font-family: 'Fredoka', cursive;
+      font-size: 18px;
+      font-weight: 700;
+      padding: 13px 36px;
+      border-radius: 40px;
+      cursor: pointer;
+      box-shadow: 0 8px 25px rgba(16, 185, 129, 0.5);
+      transition: all 0.2s;
+    }
+
+    .btn-action:hover {
+      transform: scale(1.05);
+      box-shadow: 0 10px 30px rgba(16, 185, 129, 0.7);
+    }
+
+    .btn-secondary {
+      background: rgba(51, 65, 85, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 14px;
+      padding: 8px 18px;
+      border-radius: 20px;
+      cursor: pointer;
+      color: #cbd5e1;
+      font-family: 'Fredoka', cursive;
+      transition: 0.2s;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(71, 85, 105, 1);
+      color: #fff;
+    }
+
+    /* HOST ROOM LOBBY INFO */
+    .room-info-card {
+      background: rgba(30, 41, 59, 0.85);
+      border: 2px dashed #facc15;
+      border-radius: 14px;
+      padding: 16px 24px;
+      margin-bottom: 20px;
+      text-align: center;
+      max-width: 440px;
+      width: 100%;
+    }
+
+    .room-code-tag {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 24px;
+      color: #facc15;
+      margin: 8px 0;
+      letter-spacing: 2px;
+      text-shadow: 0 0 10px rgba(250, 204, 21, 0.6);
+    }
+
+    .player-list-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      max-height: 120px;
+      overflow-y: auto;
+      margin: 10px 0;
+      padding: 6px;
+    }
+
+    .player-chip {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* PLAYER CONTROLLER SCREEN (FOR PLAYERS JOINED) */
+    #player-controller-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 100%;
+      padding: 20px;
+      background: #0f172a;
+    }
+
+    .controller-hud {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(30, 41, 59, 0.7);
+      padding: 10px 16px;
+      border-radius: 12px;
+    }
+
+    .controller-status-box {
+      text-align: center;
+      margin: 15px 0;
+    }
+
+    .dpad-controller {
+      display: grid;
+      grid-template-columns: repeat(3, 75px);
+      grid-template-rows: repeat(3, 75px);
+      gap: 10px;
+      margin-bottom: 25px;
+    }
+
+    .dpad-btn-ctrl {
+      background: linear-gradient(135deg, #334155, #1e293b);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      color: #fff;
+      touch-action: none;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      transition: all 0.1s;
+    }
+
+    .dpad-btn-ctrl:active,
+    .dpad-btn-ctrl.active {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      border-color: #a5b4fc;
+      transform: scale(0.92);
+      box-shadow: 0 2px 6px rgba(99, 102, 241, 0.6);
+    }
+
+    /* TOP 3 PODIUM LEADERBOARD */
+    .podium-container {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 14px;
+      margin: 20px 0 25px 0;
+      width: 100%;
+      max-width: 520px;
+    }
+
+    .podium-column {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+    }
+
+    .podium-avatar {
+      font-size: 32px;
+      margin-bottom: 6px;
+      animation: floatPodium 2s infinite ease-in-out;
+    }
+
+    .podium-name {
+      font-weight: 700;
+      font-size: 14px;
+      color: #fff;
+      margin-bottom: 2px;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+      max-width: 110px;
+    }
+
+    .podium-score {
+      font-size: 12px;
+      font-weight: 600;
+      color: #facc15;
+      margin-bottom: 6px;
+    }
+
+    .podium-block {
+      width: 100%;
+      border-radius: 12px 12px 0 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      font-weight: 800;
+      box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.3);
+      color: #0f172a;
+    }
+
+    .rank-1 .podium-block {
+      height: 120px;
+      background: linear-gradient(180deg, #facc15, #ca8a04);
+      box-shadow: 0 0 25px rgba(250, 204, 21, 0.6);
+    }
+
+    .rank-2 .podium-block {
+      height: 85px;
+      background: linear-gradient(180deg, #e2e8f0, #94a3b8);
+      box-shadow: 0 0 15px rgba(226, 232, 240, 0.4);
+    }
+
+    .rank-3 .podium-block {
+      height: 65px;
+      background: linear-gradient(180deg, #fb923c, #c2410c);
+      box-shadow: 0 0 15px rgba(251, 146, 60, 0.4);
+    }
+
+    @keyframes floatPodium {
+
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-8px);
+      }
+    }
+
+    .rest-ranks-list {
+      max-height: 110px;
+      overflow-y: auto;
+      width: 100%;
+      max-width: 440px;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 10px;
+      padding: 8px 14px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .rest-rank-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 13px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    /* SOUND BUTTON */
+    #sound-btn {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 80;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      font-size: 18px;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    #sound-btn:hover {
+      background: rgba(51, 65, 85, 1);
+    }
+
+    @media (max-width: 768px) {
+      #doors-overlay {
+        top: 175px;
+        padding: 0 10px;
+      }
+
+      .door-label-card {
+        min-width: 95px;
+        padding: 4px 6px;
+      }
+
+      .door-label-card .door-text {
+        font-size: 11px;
+      }
+
+      .dpad-controller {
+        grid-template-columns: repeat(3, 65px);
+        grid-template-rows: repeat(3, 65px);
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="game-container">
+    <button id="sound-btn" title="Toggle Suara">🔊</button>
+
+    <!-- TOP HUD: QUESTION & TIMER (FOR HOST SCREEN) -->
+    <div id="top-hud">
+      <div class="hud-meta">
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <span class="badge-stage" id="stage-badge">Stage 1: Hutan Tropis</span>
+          <span id="role-status-badge" style="background: rgba(99, 102, 241, 0.25); border: 1px solid #818cf8; color: #a5b4fc; padding: 4px 10px; border-radius: 14px; font-size: 12px; font-weight: 700;">👁️ MODE PANTAU (HOST)</span>
+          <span id="player-conn-status" style="font-size: 11px; color: #facc15; font-weight: 600; display: none; background: rgba(0,0,0,0.4); padding: 3px 8px; border-radius: 10px;">🟡 Menghubungkan...</span>
+        </div>
+        <div class="player-counter" id="active-player-count">👥 0 Pemain</div>
+      </div>
+
+      <div class="timer-wrapper">
+        <div class="timer-bar-bg">
+          <div class="timer-bar-fill" id="timer-bar"></div>
+        </div>
+        <div class="timer-text" id="timer-text">15s</div>
+      </div>
+
+      <div class="question-card">
+        <h2 id="question-text">Menunggu game dimulai...</h2>
+      </div>
+    </div>
+
+    <!-- DOOR LABELS OVERLAY -->
+    <div id="doors-overlay">
+      <div class="door-label-card" id="label-door-0">
+        <div class="door-tag tag-a">PINTU A</div>
+        <div class="door-text" id="text-door-0">Jawaban A</div>
+      </div>
+      <div class="door-label-card" id="label-door-1">
+        <div class="door-tag tag-b">PINTU B</div>
+        <div class="door-text" id="text-door-1">Jawaban B</div>
+      </div>
+      <div class="door-label-card" id="label-door-2">
+        <div class="door-tag tag-c">PINTU C</div>
+        <div class="door-text" id="text-door-2">Jawaban C</div>
+      </div>
+    </div>
+
+    <!-- CANVAS GAME (HOST ARENA) -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- ROUND RESULT BANNER -->
+    <div class="round-result-banner" id="result-banner">
+      <h1 id="result-title">BENAR! 🎉</h1>
+      <p id="result-desc">Pintu A adalah jawaban yang tepat!</p>
+    </div>
+
+    <!-- SCREEN 1: PILIH PERAN (HOST ATAU PLAYER) -->
+    <div class="menu-screen" id="role-screen">
+      <div class="game-logo">🚪 TRIVIA DOOR DASH</div>
+      <p class="game-subtitle">
+        Pilih peranmu untuk memulai! Host menampilkan layar utama game, dan Player dapat bergabung bebas tanpa batas!
+      </p>
+
+      <div class="role-selection">
+        <div class="role-card selected" id="opt-host" onclick="chooseRole('host')">
+          <div class="role-icon">👑</div>
+          <div class="role-title">HOST (Tuan Rumah)</div>
+          <div class="role-desc">Tampilkan arena utama, pertanyaan, pintu, timer, dan leaderboard.</div>
+        </div>
+        <div class="role-card" id="opt-player" onclick="chooseRole('player')">
+          <div class="role-icon">🎮</div>
+          <div class="role-title">PLAYER (Pemain)</div>
+          <div class="role-desc">Gabung ke dalam room dengan nama pemain & kontrol karaktermu!</div>
+        </div>
+      </div>
+
+      <!-- FORM JIKA PILIH HOST -->
+      <div id="host-setup-form" style="display: flex; flex-direction: column; align-items: center;">
+        <button class="btn-action" onclick="createHostRoom()">Buka Room Game (HOST) 🚀</button>
+      </div>
+
+      <!-- FORM JIKA PILIH PLAYER -->
+      <div id="player-setup-form" class="form-box" style="display: none;">
+        <input type="text" id="input-player-name" placeholder="Ketik Nama Pemain..." maxlength="12">
+        <input type="text" id="input-room-code" placeholder="Kode Room (Contoh: PINTU-1)"
+          style="text-transform: uppercase;">
+        <button class="btn-action" onclick="joinAsPlayer()">Gabung ke Game 🎯</button>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: LOBBY HOST (MENUNGGU PEMAIN GABUNG) -->
+    <div class="menu-screen hidden" id="host-lobby-screen">
+      <div class="game-logo">👑 RUANG TUNGGU HOST</div>
+
+      <div class="room-info-card">
+        <div style="font-size: 13px; color: #94a3b8;">KODE ROOM UNTUK GABUNG:</div>
+        <div class="room-code-tag" id="display-room-code">MEMBUAT...</div>
+        <div style="margin-bottom: 6px;"><span id="host-net-status" style="font-size: 12px; color: #facc15; font-weight: 600;">🟡 Menghubungkan ke Server Cloud...</span></div>
+        <div style="background: rgba(16, 185, 129, 0.15); border: 1px dashed #10b981; padding: 6px 12px; border-radius: 8px; margin: 8px 0; font-size: 13px; color: #a7f3d0;">
+          📱 <b>Cara Buka di HP:</b> Buka browser di HP lalu ketik alamat:<br>
+          <span style="color: #facc15; font-weight: 700; font-size: 15px;" id="hp-ip-address">http://192.168.1.9:3000</span>
+        </div>
+        <p style="font-size: 12px; color: #cbd5e1;">Pilih <b>PLAYER</b> di HP, masukkan nama & kode room di atas.</p>
+
+        <div style="margin-top: 10px; font-weight: 700; color: #38bdf8;">
+          Daftar Pemain Terhubung (<span id="lobby-player-count">0</span>):
+        </div>
+        <div class="player-list-chips" id="lobby-player-list">
+          <span style="font-size: 12px; color: #64748b;">Belum ada pemain bergabung...</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <button class="btn-secondary" onclick="addBotPlayer(1)">+ Tambah 1 Bot</button>
+        <button class="btn-secondary" onclick="addBotPlayer(5)">+ Tambah 5 Bot</button>
+        <button class="btn-secondary" onclick="addBotPlayer(10)">+ Tambah 10 Bot</button>
+      </div>
+
+      <button class="btn-action" onclick="startHostGame()">Mulai Permainan Sekarang! 🚀</button>
+    </div>
+
+    <!-- FLOATING TOUCH DPAD (KHUSUS MOBILE/SENTUH PLAYER) -->
+    <div id="player-touch-controls" style="display: none; position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); z-index: 50; pointer-events: none;">
+      <div class="dpad-controller" style="pointer-events: auto; margin: 0; background: rgba(15, 23, 42, 0.75); padding: 8px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 4px 20px rgba(0,0,0,0.6);">
+        <div></div>
+        <div class="dpad-btn-ctrl" data-dir="up">⬆️</div>
+        <div></div>
+        <div class="dpad-btn-ctrl" data-dir="left">⬅️</div>
+        <div class="dpad-btn-ctrl" data-dir="down">⬇️</div>
+        <div class="dpad-btn-ctrl" data-dir="right">➡️</div>
+      </div>
+    </div>
+
+    <!-- SCREEN 4: TOP 3 PODIUM & LEADERBOARD (SELESAI SEMUA PERTANYAAN) -->
+    <div class="menu-screen hidden" id="leaderboard-screen">
+      <div class="game-logo">🏆 3 SKOR TERTINGGI!</div>
+      <p class="game-subtitle">Semua stage telah selesai! Berikut adalah para juara penakluk pintu:</p>
+
+      <!-- 3 PODIUM (JUARA 2, JUARA 1, JUARA 3) -->
+      <div class="podium-container">
+        <!-- RANK 2 (PERAK) -->
+        <div class="podium-column rank-2" id="podium-col-2">
+          <div class="podium-avatar">🥈</div>
+          <div class="podium-name" id="podium-name-2">-</div>
+          <div class="podium-score" id="podium-score-2">0 Poin</div>
+          <div class="podium-block">2</div>
+        </div>
+
+        <!-- RANK 1 (EMAS) -->
+        <div class="podium-column rank-1" id="podium-col-1">
+          <div class="podium-avatar">👑</div>
+          <div class="podium-name" id="podium-name-1">-</div>
+          <div class="podium-score" id="podium-score-1">0 Poin</div>
+          <div class="podium-block">1</div>
+        </div>
+
+        <!-- RANK 3 (PERUNGGU) -->
+        <div class="podium-column rank-3" id="podium-col-3">
+          <div class="podium-avatar">🥉</div>
+          <div class="podium-name" id="podium-name-3">-</div>
+          <div class="podium-score" id="podium-score-3">0 Poin</div>
+          <div class="podium-block">3</div>
+        </div>
+      </div>
+
+      <!-- PERINGKAT SELANJUTNYA -->
+      <div class="rest-ranks-list" id="rest-leaderboard-list">
+        <!-- Injected via JS -->
+      </div>
+
+      <button class="btn-action" onclick="resetToLobby()">Main Ronde Baru 🔄</button>
+    </div>
+
+  </div>
+
+  <script>
+    /* ==========================================================
+       AUDIO SYNTHESIZER (Web Audio API)
+       ========================================================== */
+    const AudioEngine = {
+      ctx: null,
+      enabled: true,
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) this.ctx = new AudioContext();
+        }
+      },
+      playTone(freq, type, duration, delay = 0, vol = 0.2) {
+        if (!this.enabled || !this.ctx) return;
+        setTimeout(() => {
+          try {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+            gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+            osc.stop(this.ctx.currentTime + duration);
+          } catch (e) { }
+        }, delay);
+      },
+      playTick() { this.playTone(800, 'sine', 0.05, 0, 0.1); },
+      playWarningTick() { this.playTone(950, 'sawtooth', 0.08, 0, 0.25); },
+      playSuccess() {
+        this.playTone(523.25, 'triangle', 0.12, 0, 0.3);
+        this.playTone(659.25, 'triangle', 0.12, 100, 0.3);
+        this.playTone(783.99, 'triangle', 0.25, 200, 0.4);
+        this.playTone(1046.50, 'triangle', 0.4, 320, 0.5);
+      },
+      playWrong() {
+        this.playTone(220, 'sawtooth', 0.18, 0, 0.35);
+        this.playTone(174, 'sawtooth', 0.3, 150, 0.4);
+      },
+      playWin() {
+        [523, 659, 783, 1046, 783, 1046, 1318].forEach((f, i) => {
+          this.playTone(f, 'sine', 0.25, i * 140, 0.3);
+        });
+      }
+    };
+
+    const soundBtn = document.getElementById('sound-btn');
+    soundBtn.addEventListener('click', () => {
+      AudioEngine.init();
+      AudioEngine.enabled = !AudioEngine.enabled;
+      soundBtn.textContent = AudioEngine.enabled ? '🔊' : '🔇';
+    });
+
+    /* ==========================================================
+       STAGE QUESTIONS DATA
+       ========================================================== */
+    const STAGES = [
+      {
+        name: "Hutan Tropis",
+        bgType: "forest",
+        bgColor: "#14532d",
+        floorColor: "#166534",
+        question: "Apa ibukota baru negara Indonesia yang terletak di Kalimantan Timur?",
+        doors: [
+          { text: "Nusantara (IKN)", correct: true },
+          { text: "Balikpapan", correct: false },
+          { text: "Samarinda", correct: false }
+        ]
+      },
+      {
+        name: "Gurun Pasir",
+        bgType: "desert",
+        bgColor: "#78350f",
+        floorColor: "#92400e",
+        question: "Hewan apa yang dijuluki 'Kapal Gurun' karena mampu bertahan tanpa air berhari-hari?",
+        doors: [
+          { text: "Kuda", correct: false },
+          { text: "Unta", correct: true },
+          { text: "Kancil", correct: false }
+        ]
+      },
+      {
+        name: "Kastil Berhantu",
+        bgType: "castle",
+        bgColor: "#312e81",
+        floorColor: "#3730a3",
+        question: "Berapakah hasil dari operasi hitung: 15 x 6 + 10?",
+        doors: [
+          { text: "80", correct: false },
+          { text: "100", correct: true },
+          { text: "115", correct: false }
+        ]
+      },
+      {
+        name: "Kota Cyberpunk",
+        bgType: "cyber",
+        bgColor: "#0f172a",
+        floorColor: "#1e1b4b",
+        question: "Planet manakah yang merupakan planet terbesar di tata surya kita?",
+        doors: [
+          { text: "Mars", correct: false },
+          { text: "Jupiter", correct: true },
+          { text: "Saturnus", correct: false }
+        ]
+      },
+      {
+        name: "Samudera Atlantis",
+        bgType: "ocean",
+        bgColor: "#0c4a6e",
+        floorColor: "#0369a1",
+        question: "Rumus senyawa kimia untuk air adalah?",
+        doors: [
+          { text: "H2O", correct: true },
+          { text: "CO2", correct: false },
+          { text: "NaCl", correct: false }
+        ]
+      },
+      {
+        name: "Puncak Salju",
+        bgType: "snow",
+        bgColor: "#1e293b",
+        floorColor: "#334155",
+        question: "Benua terbesar dan memiliki populasi terbanyak di dunia adalah?",
+        doors: [
+          { text: "Benua Eropa", correct: false },
+          { text: "Benua Afrika", correct: false },
+          { text: "Benua Asia", correct: true }
+        ]
+      },
+      {
+        name: "Luar Angkasa",
+        bgType: "space",
+        bgColor: "#050515",
+        floorColor: "#0f172a",
+        question: "Monumen Nasional (Monas) terletak di provinsi mana?",
+        doors: [
+          { text: "DKI Jakarta", correct: true },
+          { text: "Jawa Barat", correct: false },
+          { text: "Yogyakarta", correct: false }
+        ]
+      },
+      {
+        name: "Arena Pemenang",
+        bgType: "magma",
+        bgColor: "#450a0a",
+        floorColor: "#7f1d1d",
+        question: "Mata uang resmi Negara Kesatuan Republik Indonesia adalah?",
+        doors: [
+          { text: "Ringgit", correct: false },
+          { text: "Rupiah", correct: true },
+          { text: "Dollar", correct: false }
+        ]
+      }
+    ];
+
+    const AVATAR_COLORS = [
+      '#38bdf8', '#f43f5e', '#10b981', '#facc15', '#a855f7',
+      '#fb923c', '#ec4899', '#22d3ee', '#84cc16', '#e879f9'
+    ];
+
+    /* ==========================================================
+       COMMUNICATION LAYER (BroadcastChannel + PeerJS)
+       Allows unlimited players on local tabs or network!
+       ========================================================== */
+    let myRole = 'host'; // 'host' or 'player'
+    let roomCode = 'PINTU-' + Math.floor(1000 + Math.random() * 9000);
+    let myPlayerId = 'p_' + Math.random().toString(36).substring(2, 8);
+    let myPlayerName = 'Pemain';
+    let myColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
+
+    let broadcastChannel = null;
+    let peer = null;
+    let peerConnections = [];
+
+    // Konfigurasi STUN server Google agar WebRTC bisa tembus NAT / beda jaringan HP & Laptop
+    const PEER_CONFIG = {
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' }
+        ]
+      }
+    };
+
+    function initNetwork(channelName) {
+      const cleanRoom = channelName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      // 1. BroadcastChannel (Untuk tab lokal di laptop yang sama)
+      if (window.BroadcastChannel) {
+        if (broadcastChannel) broadcastChannel.close();
+        broadcastChannel = new BroadcastChannel('doordash_' + cleanRoom);
+        broadcastChannel.onmessage = (event) => {
+          handleIncomingMessage(event.data);
+        };
+      }
+
+      // 2. PeerJS WebRTC (Untuk HP / Laptop beda jaringan dengan STUN Server)
+      if (typeof Peer !== 'undefined') {
+        try {
+          if (peer) {
+            peer.destroy();
+            peer = null;
+          }
+
+          if (myRole === 'host') {
+            const hostPeerId = 'doordash_room_' + cleanRoom;
+            peer = new Peer(hostPeerId, PEER_CONFIG);
+
+            peer.on('open', (id) => {
+              console.log('Host terhubung ke Peer server dengan ID:', id);
+              const hostStatus = document.getElementById('host-net-status');
+              if (hostStatus) {
+                hostStatus.textContent = '🟢 Server Online & Siap';
+                hostStatus.style.color = '#34d399';
+              }
+            });
+
+            peer.on('connection', (conn) => {
+              conn.on('open', () => {
+                if (!peerConnections.includes(conn)) {
+                  peerConnections.push(conn);
+                }
+                // Kirim konfirmasi balik ke Player yang baru konek
+                conn.send({
+                  type: 'HOST_HELLO',
+                  stageIndex: currentStageIndex,
+                  timer: stageTimer
+                });
+              });
+
+              conn.on('data', (data) => {
+                handleIncomingMessage(data);
+              });
+
+              conn.on('close', () => {
+                peerConnections = peerConnections.filter(c => c !== conn);
+              });
+            });
+
+            peer.on('error', (err) => {
+              console.warn('Host Peer error:', err);
+              const hostStatus = document.getElementById('host-net-status');
+              if (hostStatus) {
+                hostStatus.textContent = '🟡 Reconnecting...';
+                hostStatus.style.color = '#facc15';
+              }
+            });
+
+          } else if (myRole === 'player') {
+            const hostPeerId = 'doordash_room_' + cleanRoom;
+            peer = new Peer(PEER_CONFIG);
+
+            let retryInterval = null;
+            let isConnectedToHost = false;
+
+            const connectToHost = () => {
+              if (isConnectedToHost || !peer || peer.destroyed) return;
+
+              const conn = peer.connect(hostPeerId, { reliable: true });
+
+              conn.on('open', () => {
+                isConnectedToHost = true;
+                clearInterval(retryInterval);
+                if (!peerConnections.includes(conn)) {
+                  peerConnections.push(conn);
+                }
+
+                // Update indikator status di layar player
+                const statusPill = document.getElementById('player-conn-status');
+                if (statusPill) {
+                  statusPill.textContent = '🟢 Terhubung ke Host!';
+                  statusPill.style.color = '#34d399';
+                }
+
+                // Kirim data gabung ke Host
+                conn.send({
+                  type: 'PLAYER_JOIN',
+                  player: {
+                    id: myPlayerId,
+                    name: myPlayerName,
+                    color: myColor,
+                    isBot: false,
+                    x: canvas.width / 2,
+                    y: canvas.height - 70
+                  }
+                });
+              });
+
+              conn.on('data', (data) => {
+                handleIncomingMessage(data);
+              });
+
+              conn.on('close', () => {
+                isConnectedToHost = false;
+                peerConnections = peerConnections.filter(c => c !== conn);
+                const statusPill = document.getElementById('player-conn-status');
+                if (statusPill) {
+                  statusPill.textContent = '🔴 Terputus, mencoba lagi...';
+                  statusPill.style.color = '#ef4444';
+                }
+              });
+
+              conn.on('error', (err) => {
+                console.warn('Player conn error:', err);
+              });
+            };
+
+            peer.on('open', () => {
+              connectToHost();
+              // Jika belum tersambung, coba lagi setiap 2 detik
+              retryInterval = setInterval(() => {
+                if (!isConnectedToHost) {
+                  connectToHost();
+                }
+              }, 2000);
+            });
+
+            peer.on('error', (err) => {
+              console.warn('Player Peer error:', err);
+              const statusPill = document.getElementById('player-conn-status');
+              if (statusPill) {
+                statusPill.textContent = '🟡 Menunggu Host siap...';
+                statusPill.style.color = '#facc15';
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('PeerJS init failed:', e);
+        }
+      }
+    }
+
+    function sendNetworkMessage(data) {
+      // Send via BroadcastChannel (local tabs / instant)
+      if (broadcastChannel) {
+        broadcastChannel.postMessage(data);
+      }
+      // Send via PeerJS connections
+      peerConnections.forEach(conn => {
+        if (conn && conn.open) {
+          conn.send(data);
+        }
+      });
+    }
+
+    function handleIncomingMessage(msg) {
+      if (!msg || !msg.type) return;
+
+      if (myRole === 'host') {
+        if (msg.type === 'PLAYER_JOIN') {
+          registerPlayer(msg.player);
+          broadcastSync();
+        } else if (msg.type === 'PLAYER_MOVE') {
+          const p = connectedPlayers.get(msg.playerId);
+          if (p) {
+            p.input = msg.input;
+            if (msg.x !== undefined && msg.y !== undefined) {
+              p.x = msg.x;
+              p.y = msg.y;
+            }
+          }
+        }
+      } else if (myRole === 'player') {
+        if (msg.type === 'SYNC_STATE') {
+          if (currentStageIndex !== msg.stageIndex) {
+            currentStageIndex = msg.stageIndex;
+            applyStageData(msg.stageIndex);
+          }
+          stageTimer = msg.timer;
+          updateTimerUI();
+
+          // Sync other players' positions
+          if (msg.players && Array.isArray(msg.players)) {
+            msg.players.forEach(sp => {
+              if (sp.id !== myPlayerId) {
+                if (!connectedPlayers.has(sp.id)) {
+                  registerPlayer(sp);
+                }
+                const targetP = connectedPlayers.get(sp.id);
+                if (targetP) {
+                  targetP.x = sp.x;
+                  targetP.y = sp.y;
+                  targetP.score = sp.score;
+                  targetP.walkCycle = sp.walkCycle;
+                }
+              } else {
+                const me = connectedPlayers.get(myPlayerId);
+                if (me) {
+                  me.score = sp.score;
+                  updatePlayerHUDScore(me.score);
+                }
+              }
+            });
+          }
+        } else if (msg.type === 'STAGE_UPDATE') {
+          currentStageIndex = msg.stageIndex;
+          isRoundEnded = false;
+          stageTimer = 15;
+          applyStageData(msg.stageIndex);
+        } else if (msg.type === 'ROUND_RESULT') {
+          applyRoundResultUI(msg.correctIndex, msg.anyCorrect, msg.scores);
+        } else if (msg.type === 'SHOW_LEADERBOARD') {
+          renderLeaderboardUI(msg.sortedPlayers);
+        }
+      }
+    }
+
+    /* ==========================================================
+       HOST GAME STATE & CANVAS
+       ========================================================== */
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+
+    let currentStageIndex = 0;
+    let stageTimer = 15;
+    let timerInterval = null;
+    let isRoundEnded = false;
+    let particles = [];
+    let bgParticles = [];
+
+    // Unlimited players map: id -> player object
+    const connectedPlayers = new Map();
+
+    function resizeCanvas() {
+      const container = document.getElementById('game-container');
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    let doorZones = [];
+
+    function setupDoors() {
+      const w = canvas.width;
+      const count = 3;
+      const doorWidth = Math.min(160, (w - 80) / count);
+      const doorHeight = 110;
+      const spacing = (w - (count * doorWidth)) / (count + 1);
+      const doorY = 195;
+
+      doorZones = [];
+      for (let i = 0; i < count; i++) {
+        const doorX = spacing + i * (doorWidth + spacing);
+        doorZones.push({
+          index: i,
+          x: doorX,
+          y: doorY,
+          width: doorWidth,
+          height: doorHeight,
+          status: 'idle'
+        });
+      }
+    }
+
+    function registerPlayer(pData) {
+      if (!connectedPlayers.has(pData.id)) {
+        const startX = 60 + Math.random() * (canvas.width - 120);
+        const startY = canvas.height - 60 - Math.random() * 30;
+
+        connectedPlayers.set(pData.id, {
+          id: pData.id,
+          name: pData.name || 'Pemain',
+          color: pData.color || AVATAR_COLORS[connectedPlayers.size % AVATAR_COLORS.length],
+          x: startX,
+          y: startY,
+          radius: 17,
+          speed: 4.8,
+          score: 0,
+          walkCycle: 0,
+          input: { up: false, down: false, left: false, right: false },
+          isBot: pData.isBot || false,
+          botTargetDoor: null
+        });
+
+        updateLobbyPlayerListUI();
+      }
+    }
+
+    function updatePlayerInput(id, input) {
+      const p = connectedPlayers.get(id);
+      if (p) {
+        p.input = input;
+      }
+    }
+
+    /* ==========================================================
+       ROLE SELECTION & LOBBY CONTROLS
+       ========================================================== */
+    function chooseRole(role) {
+      myRole = role;
+      document.getElementById('opt-host').classList.toggle('selected', role === 'host');
+      document.getElementById('opt-player').classList.toggle('selected', role === 'player');
+      document.getElementById('host-setup-form').style.display = role === 'host' ? 'flex' : 'none';
+      document.getElementById('player-setup-form').style.display = role === 'player' ? 'flex' : 'none';
+    }
+
+    function createHostRoom() {
+      AudioEngine.init();
+      document.getElementById('role-screen').classList.add('hidden');
+      document.getElementById('host-lobby-screen').classList.remove('hidden');
+
+      // Update petunjuk URL jika dibuka via server IP
+      if (location.hostname && location.hostname !== '' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        const hpEl = document.getElementById('hp-ip-address');
+        if (hpEl) hpEl.textContent = 'http://' + location.hostname + (location.port ? ':' + location.port : '');
+      }
+
+      // Initialize network channel for this room
+      initNetwork(roomCode);
+      document.getElementById('display-room-code').textContent = roomCode;
+
+      // Host hanya memantau (Spectator), tidak memiliki karakter pemain
+      updateLobbyPlayerListUI();
+    }
+
+    function updateLobbyPlayerListUI() {
+      const listEl = document.getElementById('lobby-player-list');
+      const countEl = document.getElementById('lobby-player-count');
+      const activeCountEl = document.getElementById('active-player-count');
+
+      const count = connectedPlayers.size;
+      countEl.textContent = count;
+      activeCountEl.textContent = `👥 ${count} Pemain`;
+
+      if (count === 0) {
+        listEl.innerHTML = '<span style="font-size: 12px; color: #64748b;">Belum ada pemain bergabung...</span>';
+        return;
+      }
+
+      listEl.innerHTML = '';
+      connectedPlayers.forEach(p => {
+        const chip = document.createElement('div');
+        chip.className = 'player-chip';
+        chip.innerHTML = `<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${p.color};"></span> ${p.name}`;
+        listEl.appendChild(chip);
+      });
+    }
+
+    // Add Simulated Bot Players for easy multi-player testing!
+    function addBotPlayer(qty = 1) {
+      AudioEngine.init();
+      const botNames = [
+        "Budi", "Siti", "Andi", "Rian", "Dewi", "Eko", "Maya", "Doni", "Putri", "Fajar",
+        "Gita", "Hadi", "Indah", "Joko", "Kirana", "Lia", "Mega", "Niko", "Oki", "Pandu",
+        "Ratih", "Surya", "Tari", "Utari", "Vino", "Wulan", "Yoga", "Zahra", "Aldi", "Bella"
+      ];
+
+      for (let i = 0; i < qty; i++) {
+        const id = 'bot_' + Math.random().toString(36).substring(2, 7);
+        const name = botNames[Math.floor(Math.random() * botNames.length)] + ' (Bot)';
+        const color = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
+        registerPlayer({ id, name, color, isBot: true });
+      }
+    }
+
+    function joinAsPlayer() {
+      AudioEngine.init();
+      const nameInput = document.getElementById('input-player-name').value.trim();
+      const codeInput = document.getElementById('input-room-code').value.trim().toUpperCase();
+
+      if (!nameInput) {
+        alert("Silakan masukkan nama pemain terlebih dahulu!");
+        return;
+      }
+      myPlayerName = nameInput;
+
+      if (codeInput) {
+        roomCode = codeInput;
+      }
+
+      // Hide role screen, tampilkan layar game penuh untuk Player
+      document.getElementById('role-screen').classList.add('hidden');
+
+      // Update HUD untuk Player
+      const roleBadge = document.getElementById('role-status-badge');
+      if (roleBadge) {
+        roleBadge.style.background = 'rgba(16, 185, 129, 0.25)';
+        roleBadge.style.borderColor = '#34d399';
+        roleBadge.style.color = '#6ee7b7';
+        roleBadge.textContent = `🎮 KAMU: ${myPlayerName} | 0 pt`;
+      }
+
+      const statusPill = document.getElementById('player-conn-status');
+      if (statusPill) {
+        statusPill.style.display = 'inline-block';
+        statusPill.textContent = '🟡 Menghubungkan ke Host...';
+      }
+
+      // Tampilkan D-Pad sentuh jika perangkat mendukung sentuhan atau layar kecil
+      if (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 768)) {
+        const touchCtrl = document.getElementById('player-touch-controls');
+        if (touchCtrl) touchCtrl.style.display = 'block';
+      }
+
+      initNetwork(roomCode);
+
+      // Daftarkan pemain lokal ke dalam arena agar langsung terlihat & bisa bergerak
+      const startX = canvas.width / 2;
+      const startY = canvas.height - 70;
+      registerPlayer({
+        id: myPlayerId,
+        name: myPlayerName,
+        color: myColor,
+        isBot: false,
+        x: startX,
+        y: startY
+      });
+
+      // Kirim sinyal gabung ke Host
+      sendNetworkMessage({
+        type: 'PLAYER_JOIN',
+        player: {
+          id: myPlayerId,
+          name: myPlayerName,
+          color: myColor,
+          isBot: false,
+          x: startX,
+          y: startY
+        }
+      });
+
+      // Tampilkan visual panggung stage 0 untuk Player
+      applyStageData(0);
+      document.getElementById('question-text').textContent = "Menunggu Host memulai stage... Kamu bisa pemanasan & menggerakkan karaktermu sekarang!";
+    }
+
+    function applyStageData(index) {
+      currentStageIndex = index;
+      setupDoors();
+      const stage = STAGES[index] || STAGES[0];
+      document.getElementById('stage-badge').textContent = `Stage ${index + 1}/${STAGES.length}: ${stage.name}`;
+      document.getElementById('question-text').textContent = stage.question;
+
+      stage.doors.forEach((door, i) => {
+        const textEl = document.getElementById(`text-door-${i}`);
+        if (textEl) textEl.textContent = door.text;
+        const card = document.getElementById(`label-door-${i}`);
+        if (card) {
+          card.style.borderColor = '#6366f1';
+          card.style.transform = 'scale(1)';
+        }
+      });
+
+      initStageParticles(stage.bgType);
+    }
+
+    function updatePlayerHUDScore(score) {
+      if (myRole === 'player') {
+        const roleBadge = document.getElementById('role-status-badge');
+        if (roleBadge) {
+          roleBadge.textContent = `🎮 KAMU: ${myPlayerName} | ${score} pt`;
+        }
+      }
+    }
+
+    function broadcastSync() {
+      if (myRole !== 'host') return;
+      const playerArray = [];
+      connectedPlayers.forEach(p => {
+        playerArray.push({
+          id: p.id,
+          name: p.name,
+          color: p.color,
+          x: p.x,
+          y: p.y,
+          score: p.score,
+          walkCycle: p.walkCycle,
+          isBot: p.isBot
+        });
+      });
+      sendNetworkMessage({
+        type: 'SYNC_STATE',
+        stageIndex: currentStageIndex,
+        timer: stageTimer,
+        players: playerArray
+      });
+    }
+
+    // Interval sinkronisasi berkala dari Host ke semua Player
+    setInterval(() => {
+      if (myRole === 'host') {
+        broadcastSync();
+      }
+    }, 75);
+
+    /* ==========================================================
+       STAGE EXECUTION (HOST)
+       ========================================================== */
+    function startHostGame() {
+      document.getElementById('host-lobby-screen').classList.add('hidden');
+      loadStage(0);
+    }
+
+    function loadStage(index) {
+      if (index >= STAGES.length) {
+        showTop3Leaderboard();
+        return;
+      }
+
+      currentStageIndex = index;
+      isRoundEnded = false;
+      stageTimer = 15;
+      applyStageData(index);
+
+      const stage = STAGES[index];
+
+      // Reset posisi semua pemain di garis start
+      const startY = canvas.height - 65;
+      let pIdx = 0;
+      const totalP = connectedPlayers.size;
+      const spacing = Math.min(60, (canvas.width - 100) / Math.max(1, totalP));
+
+      connectedPlayers.forEach(p => {
+        p.x = 60 + pIdx * spacing + (Math.random() - 0.5) * 20;
+        p.y = startY + (Math.random() - 0.5) * 25;
+        p.walkCycle = 0;
+
+        // Bot target decision
+        if (p.isBot) {
+          const correctDoor = stage.doors.findIndex(d => d.correct);
+          const pickCorrect = Math.random() > 0.35;
+          p.botTargetDoor = pickCorrect ? correctDoor : Math.floor(Math.random() * 3);
+        }
+
+        pIdx++;
+      });
+
+      // Broadcast ke seluruh Player
+      sendNetworkMessage({
+        type: 'STAGE_UPDATE',
+        stageIndex: index,
+        stageName: stage.name,
+        question: stage.question
+      });
+
+      // Countdown 15s Timer
+      clearInterval(timerInterval);
+      updateTimerUI();
+      timerInterval = setInterval(() => {
+        if (stageTimer > 0) {
+          stageTimer--;
+          updateTimerUI();
+
+          if (stageTimer <= 5 && stageTimer > 0) {
+            AudioEngine.playWarningTick();
+          } else if (stageTimer > 5) {
+            AudioEngine.playTick();
+          }
+
+          if (stageTimer === 0) {
+            resolveRound();
+          }
+        }
+      }, 1000);
+    }
+
+    function updateTimerUI() {
+      const timerBar = document.getElementById('timer-bar');
+      const timerText = document.getElementById('timer-text');
+
+      const pct = (stageTimer / 15) * 100;
+      timerBar.style.width = pct + '%';
+      timerText.textContent = stageTimer + 's';
+
+      if (stageTimer <= 5) {
+        timerText.classList.add('timer-warning');
+        timerBar.style.background = '#ef4444';
+      } else {
+        timerText.classList.remove('timer-warning');
+        timerBar.style.background = 'linear-gradient(90deg, #10b981, #f59e0b)';
+      }
+    }
+
+    /* ==========================================================
+       ROUND RESOLUTION
+       ========================================================== */
+    function resolveRound() {
+      if (isRoundEnded) return;
+      isRoundEnded = true;
+      clearInterval(timerInterval);
+
+      const stage = STAGES[currentStageIndex];
+      const correctIndex = stage.doors.findIndex(d => d.correct);
+
+      // Calculate Scores
+      let anyCorrect = false;
+      const scoreTable = {};
+
+      connectedPlayers.forEach(p => {
+        let chosenDoor = null;
+        doorZones.forEach(dz => {
+          if (p.x >= dz.x - 20 && p.x <= dz.x + dz.width + 20 && p.y <= dz.y + dz.height + 40) {
+            chosenDoor = dz.index;
+          }
+        });
+
+        if (chosenDoor === correctIndex) {
+          p.score += 100 + (stageTimer * 10);
+          anyCorrect = true;
+          createConfetti(p.x, p.y);
+        } else {
+          createTrapBonk(p.x, p.y);
+        }
+
+        scoreTable[p.id] = p.score;
+      });
+
+      // Send results to all players
+      sendNetworkMessage({
+        type: 'ROUND_RESULT',
+        correctIndex: correctIndex,
+        anyCorrect: anyCorrect,
+        scores: scoreTable
+      });
+
+      applyRoundResultUI(correctIndex, anyCorrect, scoreTable);
+    }
+
+    function applyRoundResultUI(correctIndex, anyCorrect, scores) {
+      isRoundEnded = true;
+      const stage = STAGES[currentStageIndex] || STAGES[0];
+
+      // Animate doors
+      doorZones.forEach(dz => {
+        if (dz.index === correctIndex) {
+          dz.status = 'open';
+          const card = document.getElementById(`label-door-${dz.index}`);
+          if (card) {
+            card.style.borderColor = '#10b981';
+            card.style.transform = 'scale(1.1)';
+          }
+        } else {
+          dz.status = 'blocked';
+          const card = document.getElementById(`label-door-${dz.index}`);
+          if (card) {
+            card.style.borderColor = '#ef4444';
+            card.style.transform = 'scale(0.95)';
+          }
+        }
+      });
+
+      if (scores && scores[myPlayerId] !== undefined) {
+        updatePlayerHUDScore(scores[myPlayerId]);
+      }
+
+      // Banner
+      const banner = document.getElementById('result-banner');
+      const title = document.getElementById('result-title');
+      const desc = document.getElementById('result-desc');
+
+      if (anyCorrect) {
+        AudioEngine.playSuccess();
+        title.innerHTML = "RONDE SELESAI! 🎉";
+        title.style.color = "#10b981";
+        desc.textContent = `Pintu ${['A', 'B', 'C'][correctIndex]} (${stage.doors[correctIndex].text}) adalah jawaban yang tepat!`;
+      } else {
+        AudioEngine.playWrong();
+        title.innerHTML = "WAKTU HABIS! 💥";
+        title.style.color = "#ef4444";
+        desc.textContent = `Jawaban yang benar adalah Pintu ${['A', 'B', 'C'][correctIndex]} (${stage.doors[correctIndex].text}).`;
+      }
+
+      banner.classList.add('show');
+
+      // Next stage transition
+      if (myRole === 'host') {
+        setTimeout(() => {
+          banner.classList.remove('show');
+          doorZones.forEach(dz => {
+            const card = document.getElementById(`label-door-${dz.index}`);
+            if (card) card.style.transform = 'scale(1)';
+          });
+          loadStage(currentStageIndex + 1);
+        }, 3000);
+      } else {
+        setTimeout(() => {
+          banner.classList.remove('show');
+          doorZones.forEach(dz => {
+            const card = document.getElementById(`label-door-${dz.index}`);
+            if (card) card.style.transform = 'scale(1)';
+          });
+        }, 2800);
+      }
+    }
+
+    /* ==========================================================
+       TOP 3 PODIUM & LEADERBOARD (SETELAH SEMUA PERTANYAAN)
+       ========================================================== */
+    function showTop3Leaderboard() {
+      // Sort all players descending by score
+      const sortedPlayers = Array.from(connectedPlayers.values()).sort((a, b) => b.score - a.score);
+
+      // Render on Host screen
+      renderLeaderboardUI(sortedPlayers);
+
+      // Broadcast to all Player screens
+      sendNetworkMessage({
+        type: 'SHOW_LEADERBOARD',
+        sortedPlayers: sortedPlayers.map(p => ({ name: p.name, score: p.score }))
+      });
+    }
+
+    function renderLeaderboardUI(sortedPlayers) {
+      clearInterval(timerInterval);
+      AudioEngine.playWin();
+
+      const p1 = sortedPlayers[0];
+      const p2 = sortedPlayers[1];
+      const p3 = sortedPlayers[2];
+
+      // Juara 1
+      if (p1) {
+        document.getElementById('podium-name-1').textContent = p1.name;
+        document.getElementById('podium-score-1').textContent = p1.score + ' Poin';
+        document.getElementById('podium-col-1').style.visibility = 'visible';
+      } else {
+        document.getElementById('podium-col-1').style.visibility = 'hidden';
+      }
+
+      // Juara 2
+      if (p2) {
+        document.getElementById('podium-name-2').textContent = p2.name;
+        document.getElementById('podium-score-2').textContent = p2.score + ' Poin';
+        document.getElementById('podium-col-2').style.visibility = 'visible';
+      } else {
+        document.getElementById('podium-col-2').style.visibility = 'hidden';
+      }
+
+      // Juara 3
+      if (p3) {
+        document.getElementById('podium-name-3').textContent = p3.name;
+        document.getElementById('podium-score-3').textContent = p3.score + ' Poin';
+        document.getElementById('podium-col-3').style.visibility = 'visible';
+      } else {
+        document.getElementById('podium-col-3').style.visibility = 'hidden';
+      }
+
+      // Peringkat 4 dan seterusnya
+      const restList = document.getElementById('rest-leaderboard-list');
+      restList.innerHTML = '';
+      if (sortedPlayers.length > 3) {
+        for (let i = 3; i < sortedPlayers.length; i++) {
+          const sp = sortedPlayers[i];
+          const item = document.createElement('div');
+          item.className = 'rest-rank-item';
+          item.innerHTML = `
+            <span><b>#${i + 1}</b> ${sp.name}</span>
+            <span style="color: #facc15; font-weight:700;">${sp.score} Poin</span>
+          `;
+          restList.appendChild(item);
+        }
+      } else {
+        restList.innerHTML = '<div style="text-align:center; color:#94a3b8; font-size:12px;">Semua pemain berada di podium 3 teratas!</div>';
+      }
+
+      // Continuous victory confetti
+      for (let c = 0; c < 50; c++) {
+        createConfetti(Math.random() * canvas.width, Math.random() * (canvas.height / 2));
+      }
+
+      document.getElementById('leaderboard-screen').classList.remove('hidden');
+    }
+
+    function resetToLobby() {
+      document.getElementById('leaderboard-screen').classList.add('hidden');
+      if (myRole === 'host') {
+        document.getElementById('host-lobby-screen').classList.remove('hidden');
+      } else {
+        document.getElementById('role-screen').classList.remove('hidden');
+      }
+      connectedPlayers.forEach(p => p.score = 0);
+    }
+
+    /* ==========================================================
+       CANVAS RENDERING & PLAYER PHYSICS
+       ========================================================== */
+    function initStageParticles(theme) {
+      bgParticles = [];
+      const count = 35;
+      for (let i = 0; i < count; i++) {
+        bgParticles.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          size: Math.random() * 4 + 1,
+          speedY: (Math.random() - 0.5) * 1.5,
+          speedX: (Math.random() - 0.5) * 1.5,
+          color: getThemeParticleColor(theme),
+          alpha: Math.random() * 0.7 + 0.3
+        });
+      }
+    }
+
+    function getThemeParticleColor(theme) {
+      switch (theme) {
+        case 'forest': return '#86efac';
+        case 'desert': return '#fde047';
+        case 'castle': return '#c084fc';
+        case 'cyber': return '#38bdf8';
+        case 'ocean': return '#67e8f9';
+        case 'snow': return '#ffffff';
+        case 'space': return '#e0e7ff';
+        case 'magma': return '#f87171';
+        default: return '#ffffff';
+      }
+    }
+
+    function drawStageBackground(theme) {
+      const w = canvas.width;
+      const h = canvas.height;
+      const stage = STAGES[currentStageIndex] || STAGES[0];
+
+      // Base gradient floor
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, stage.bgColor);
+      grad.addColorStop(0.35, stage.bgColor);
+      grad.addColorStop(0.38, stage.floorColor);
+      grad.addColorStop(1, '#020617');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Floor grid lines
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 1;
+      const horizonY = 220;
+      for (let x = -w; x < w * 2; x += 60) {
+        ctx.beginPath();
+        ctx.moveTo(x, h);
+        ctx.lineTo(w / 2 + (x - w / 2) * 0.2, horizonY);
+        ctx.stroke();
+      }
+      for (let y = horizonY + 30; y < h; y += 45) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Ambient particles
+      bgParticles.forEach(p => {
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        p.x += p.speedX;
+        p.y += p.speedY;
+        if (p.x < 0) p.x = w;
+        if (p.x > w) p.x = 0;
+        if (p.y < 120) p.y = h;
+        if (p.y > h) p.y = 120;
+      });
+    }
+
+    function drawDoors() {
+      // Hitung pemain yang memilih masing-masing pintu secara live
+      const doorPlayerCounts = [0, 0, 0];
+      connectedPlayers.forEach(p => {
+        doorZones.forEach(dz => {
+          if (p.x >= dz.x - 20 && p.x <= dz.x + dz.width + 20 && p.y <= dz.y + dz.height + 40) {
+            doorPlayerCounts[dz.index]++;
+          }
+        });
+      });
+
+      doorZones.forEach(dz => {
+        const x = dz.x;
+        const y = dz.y;
+        const w = dz.width;
+        const h = dz.height;
+
+        ctx.save();
+        // Door frame
+        ctx.fillStyle = '#1e293b';
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 4;
+        ctx.fillRect(x - 5, y - 5, w + 10, h + 10);
+        ctx.strokeRect(x - 5, y - 5, w + 10, h + 10);
+
+        if (dz.status === 'open') {
+          // Open portal
+          const portalGrad = ctx.createRadialGradient(x + w / 2, y + h / 2, 5, x + w / 2, y + h / 2, w / 2);
+          portalGrad.addColorStop(0, '#ffffff');
+          portalGrad.addColorStop(0.4, '#10b981');
+          portalGrad.addColorStop(1, '#064e3b');
+          ctx.fillStyle = portalGrad;
+          ctx.fillRect(x, y, w, h);
+        } else if (dz.status === 'blocked') {
+          // Blocked X
+          ctx.fillStyle = '#450a0a';
+          ctx.fillRect(x, y, w, h);
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 6;
+          ctx.beginPath();
+          ctx.moveTo(x + 15, y + 15);
+          ctx.lineTo(x + w - 15, y + h - 15);
+          ctx.moveTo(x + w - 15, y + 15);
+          ctx.lineTo(x + 15, y + h - 15);
+          ctx.stroke();
+        } else {
+          // Normal door
+          const doorGrad = ctx.createLinearGradient(x, y, x + w, y + h);
+          doorGrad.addColorStop(0, '#334155');
+          doorGrad.addColorStop(1, '#1e293b');
+          ctx.fillStyle = doorGrad;
+          ctx.fillRect(x, y, w, h);
+
+          ctx.fillStyle = '#facc15';
+          ctx.beginPath();
+          ctx.arc(x + w - 20, y + h / 2, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(x - 8, y + h, w + 16, 8);
+
+        // Host Live Monitor Badge: Jumlah pemain di pintu ini
+        const count = doorPlayerCounts[dz.index] || 0;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.beginPath();
+        ctx.roundRect(x + w / 2 - 32, y + h - 26, 64, 20, 10);
+        ctx.fill();
+        ctx.fillStyle = count > 0 ? '#38bdf8' : '#94a3b8';
+        ctx.font = 'bold 11px Fredoka, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`👥 ${count}`, x + w / 2, y + h - 12);
+
+        ctx.restore();
+      });
+    }
+
+    function drawPlayer(p) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+
+      // Shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.beginPath();
+      ctx.ellipse(0, p.radius + 2, p.radius * 0.9, p.radius * 0.35, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bounce
+      const bounce = Math.sin(p.walkCycle) * 3;
+
+      // Indicator khusus jika ini adalah karakter milik pemain ini sendiri
+      if (p.id === myPlayerId) {
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(0, p.radius + 3, p.radius * 1.15, p.radius * 0.45, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Panah animasi bouncing di atas kepala
+        const arrowBounce = Math.sin(Date.now() / 180) * 4;
+        ctx.fillStyle = '#facc15';
+        ctx.font = 'bold 11px Fredoka, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(250, 204, 21, 0.8)';
+        ctx.shadowBlur = 6;
+        ctx.fillText('▼ KAMU ▼', 0, -p.radius * 1.5 - 24 + bounce + arrowBounce);
+      }
+
+      // Feet
+      ctx.fillStyle = '#1e293b';
+      const footL = Math.sin(p.walkCycle) * 5;
+      const footR = -Math.sin(p.walkCycle) * 5;
+      ctx.beginPath();
+      ctx.ellipse(-7, p.radius - 2 + footL, 4, 3, 0, 0, Math.PI * 2);
+      ctx.ellipse(7, p.radius - 2 + footR, 4, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Body (Chibi avatar)
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.roundRect(-p.radius, -p.radius * 1.2 + bounce, p.radius * 2, p.radius * 2.1, [14, 14, 8, 8]);
+      ctx.fill();
+
+      // Face Visor
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.roundRect(-p.radius * 0.65, -p.radius * 0.75 + bounce, p.radius * 1.3, p.radius * 0.7, 6);
+      ctx.fill();
+
+      // Eye glint
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(-3, -p.radius * 0.45 + bounce, 2.5, 0, Math.PI * 2);
+      ctx.arc(5, -p.radius * 0.45 + bounce, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Name & Score Tag
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px Fredoka, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 4;
+      ctx.fillText(p.name, 0, -p.radius * 1.5 + bounce);
+
+      ctx.fillStyle = '#facc15';
+      ctx.font = 'bold 10px Fredoka, sans-serif';
+      ctx.fillText(p.score + ' pt', 0, -p.radius * 1.5 - 12 + bounce);
+
+      ctx.restore();
+    }
+
+    function createConfetti(x, y) {
+      for (let i = 0; i < 35; i++) {
+        particles.push({
+          x: x,
+          y: y,
+          vx: (Math.random() - 0.5) * 8,
+          vy: (Math.random() - 1.2) * 7,
+          size: Math.random() * 6 + 3,
+          color: ['#facc15', '#38bdf8', '#4ade80', '#ec4899', '#f97316'][Math.floor(Math.random() * 5)],
+          life: 1,
+          decay: Math.random() * 0.02 + 0.015
+        });
+      }
+    }
+
+    function createTrapBonk(x, y) {
+      for (let i = 0; i < 18; i++) {
+        particles.push({
+          x: x,
+          y: y,
+          vx: (Math.random() - 0.5) * 6,
+          vy: (Math.random() - 0.5) * 6,
+          size: Math.random() * 8 + 4,
+          color: '#ef4444',
+          life: 1,
+          decay: 0.04
+        });
+      }
+    }
+
+    function updateAndDrawParticles() {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.15;
+        p.life -= p.decay;
+
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+        ctx.restore();
+      }
+    }
+
+    /* ==========================================================
+       UPDATE PLAYER MOVEMENT & BOT AI
+       ========================================================== */
+    function updatePlayersState() {
+      if (isRoundEnded) return;
+
+      const minY = 305;
+      const maxY = canvas.height - 35;
+      const minX = 25;
+      const maxX = canvas.width - 25;
+
+      connectedPlayers.forEach(p => {
+        let isMoving = false;
+
+        // BOT AI BEHAVIOR
+        if (p.isBot && p.botTargetDoor !== null && doorZones[p.botTargetDoor]) {
+          const target = doorZones[p.botTargetDoor];
+          const targetX = target.x + target.width / 2 + (Math.sin(p.id.charCodeAt(4)) * 30);
+          const targetY = target.y + target.height + 25;
+
+          // Walk forward to target
+          if (p.y > targetY) { p.y -= (p.speed * 0.65); isMoving = true; }
+          if (Math.abs(p.x - targetX) > 8) {
+            p.x += (p.x < targetX ? 1 : -1) * (p.speed * 0.65);
+            isMoving = true;
+          }
+        }
+        // HUMAN PLAYER INPUT
+        else if (p.input) {
+          if (p.input.up && p.y > minY) { p.y -= p.speed; isMoving = true; }
+          if (p.input.down && p.y < maxY) { p.y += p.speed; isMoving = true; }
+          if (p.input.left && p.x > minX) { p.x -= p.speed; isMoving = true; }
+          if (p.input.right && p.x < maxX) { p.x += p.speed; isMoving = true; }
+        }
+
+        if (isMoving) {
+          p.walkCycle += 0.25;
+        } else {
+          p.walkCycle = 0;
+        }
+      });
+    }
+
+    /* ==========================================================
+       LOCAL CONTROLS (KEYBOARD + TOUCH)
+       ========================================================== */
+    const localInput = { up: false, down: false, left: false, right: false };
+
+    function syncInput() {
+      // Jika Player, update input pemain lokal seketika & kirim ke Host
+      if (myRole === 'player') {
+        const me = connectedPlayers.get(myPlayerId);
+        if (me) {
+          me.input = { ...localInput };
+        }
+        sendNetworkMessage({
+          type: 'PLAYER_MOVE',
+          playerId: myPlayerId,
+          input: localInput,
+          x: me ? me.x : undefined,
+          y: me ? me.y : undefined
+        });
+      }
+    }
+
+    window.addEventListener('keydown', (e) => {
+      AudioEngine.init();
+      const k = e.key.toLowerCase();
+      let changed = false;
+
+      if (k === 'w' || k === 'arrowup') { localInput.up = true; changed = true; }
+      if (k === 's' || k === 'arrowdown') { localInput.down = true; changed = true; }
+      if (k === 'a' || k === 'arrowleft') { localInput.left = true; changed = true; }
+      if (k === 'd' || k === 'arrowright') { localInput.right = true; changed = true; }
+
+      if (changed) syncInput();
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const k = e.key.toLowerCase();
+      let changed = false;
+
+      if (k === 'w' || k === 'arrowup') { localInput.up = false; changed = true; }
+      if (k === 's' || k === 'arrowdown') { localInput.down = false; changed = true; }
+      if (k === 'a' || k === 'arrowleft') { localInput.left = false; changed = true; }
+      if (k === 'd' || k === 'arrowright') { localInput.right = false; changed = true; }
+
+      if (changed) syncInput();
+    });
+
+    // Mobile Virtual Controller D-Pad buttons
+    document.querySelectorAll('.dpad-btn-ctrl').forEach(btn => {
+      const dir = btn.getAttribute('data-dir');
+      const startPress = (e) => {
+        e.preventDefault();
+        AudioEngine.init();
+        localInput[dir] = true;
+        btn.classList.add('active');
+        syncInput();
+      };
+      const endPress = (e) => {
+        e.preventDefault();
+        localInput[dir] = false;
+        btn.classList.remove('active');
+        syncInput();
+      };
+
+      btn.addEventListener('mousedown', startPress);
+      btn.addEventListener('mouseup', endPress);
+      btn.addEventListener('touchstart', startPress);
+      btn.addEventListener('touchend', endPress);
+    });
+
+    /* ==========================================================
+       MAIN ANIMATION LOOP
+       ========================================================== */
+    function gameLoop() {
+      // Loop visual game berjalan di Host dan Player secara mulus
+      const stage = STAGES[currentStageIndex] || STAGES[0];
+      drawStageBackground(stage.bgType);
+      drawDoors();
+      updatePlayersState();
+
+      connectedPlayers.forEach(p => {
+        drawPlayer(p);
+      });
+
+      updateAndDrawParticles();
+      requestAnimationFrame(gameLoop);
+    }
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+
+</html>
